@@ -1,7 +1,8 @@
-package com.zyyoona7.cachemanager
+package com.zyyoona7.cachemanager.cache
 
 import android.graphics.Bitmap
 import android.support.v4.util.LruCache
+import com.zyyoona7.cachemanager.ext.DEFAULT_LIFE_TIME
 import java.util.concurrent.ConcurrentHashMap
 
 /**
@@ -13,11 +14,11 @@ import java.util.concurrent.ConcurrentHashMap
  */
 open class TimedLruCache<K, V> @JvmOverloads constructor(maxSize: Int = 1024) {
 
-    private var mMemoryCache: LruCache<K, V>
+    private val lruCache: LruCache<K, V>
     private var mLifeTimeMap: MutableMap<K, Long> = ConcurrentHashMap()
 
     init {
-        mMemoryCache = object : LruCache<K, V>(maxSize) {
+        lruCache = object : LruCache<K, V>(maxSize) {
             override fun sizeOf(key: K, value: V): Int {
                 return this@TimedLruCache.sizeOf(key, value)
             }
@@ -37,7 +38,7 @@ open class TimedLruCache<K, V> @JvmOverloads constructor(maxSize: Int = 1024) {
     @Synchronized
     fun put(key: K, value: V, lifeTime: Long = DEFAULT_LIFE_TIME): V? {
         if (key != null && value != null) {
-            val oldValue: V? = mMemoryCache.put(key, value)
+            val oldValue: V? = lruCache.put(key, value)
             mLifeTimeMap[key] =
                     if (lifeTime == DEFAULT_LIFE_TIME) DEFAULT_LIFE_TIME else System.currentTimeMillis() + lifeTime
             return oldValue
@@ -58,7 +59,7 @@ open class TimedLruCache<K, V> @JvmOverloads constructor(maxSize: Int = 1024) {
         val expirationTime: Long? = mLifeTimeMap[key]
         return if (expirationTime!! == DEFAULT_LIFE_TIME ||
                 System.currentTimeMillis() < expirationTime) {
-            mMemoryCache[key]
+            lruCache[key]
         } else {
             remove(key)
             null
@@ -73,7 +74,7 @@ open class TimedLruCache<K, V> @JvmOverloads constructor(maxSize: Int = 1024) {
     @Synchronized
     fun remove(key: K) {
         if (key != null) {
-            mMemoryCache.remove(key)
+            lruCache.remove(key)
             mLifeTimeMap.remove(key)
         }
     }
@@ -83,7 +84,7 @@ open class TimedLruCache<K, V> @JvmOverloads constructor(maxSize: Int = 1024) {
      */
     @Synchronized
     fun evictAll() {
-        mMemoryCache.evictAll()
+        lruCache.evictAll()
         mLifeTimeMap.clear()
     }
 
@@ -128,13 +129,13 @@ open class TimedLruCache<K, V> @JvmOverloads constructor(maxSize: Int = 1024) {
      * 缓存大小
      */
     fun size(): Int {
-        return mMemoryCache.size()
+        return lruCache.size()
     }
 
     /**
      * 最大缓存大小
      */
     fun maxSize(): Int {
-        return mMemoryCache.maxSize()
+        return lruCache.maxSize()
     }
 }

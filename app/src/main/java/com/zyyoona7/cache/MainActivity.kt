@@ -1,12 +1,18 @@
 package com.zyyoona7.cache
 
-import android.support.v7.app.AppCompatActivity
 import android.os.Bundle
+import android.support.v7.app.AppCompatActivity
+import com.zyyoona7.cachemanager.ext.DEFAULT_DISK_MAX_SIZE
+import com.zyyoona7.cachemanager.initCachePath
 
 class MainActivity : AppCompatActivity() {
+
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
+        //初始化缓存路径
+        initCachePath(filesDir.absolutePath + "/diskCache", 1, DEFAULT_DISK_MAX_SIZE)
     }
+
 }

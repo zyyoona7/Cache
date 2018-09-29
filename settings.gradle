@@ -1,1 +1,1 @@
-include ':app', ':cachemanager'
+include ':app', ':kcache'

@@ -1,8 +1,13 @@
-package com.zyyoona7.cachemanager
+package com.zyyoona7.cachemanager.cache
 
 import android.graphics.Bitmap
 import android.graphics.drawable.Drawable
 import com.jakewharton.disklrucache.DiskLruCache
+import com.zyyoona7.cachemanager.ext.*
+import com.zyyoona7.encrypts.DEFAULT_AES_TRANSFORMATION
+import com.zyyoona7.encrypts.generateSecretKey
+import com.zyyoona7.encrypts.initCipher
+import com.zyyoona7.encrypts.md5
 import org.json.JSONArray
 import org.json.JSONException
 import org.json.JSONObject
@@ -10,8 +15,6 @@ import java.io.*
 import javax.crypto.Cipher
 import javax.crypto.CipherInputStream
 import javax.crypto.CipherOutputStream
-import javax.crypto.spec.IvParameterSpec
-import javax.crypto.spec.SecretKeySpec
 
 
 /**
@@ -21,16 +24,26 @@ import javax.crypto.spec.SecretKeySpec
  * @version  v1.0.0
  * @since    2018/9/20.
  */
-open class TimedDiskLruCache @JvmOverloads constructor(dictionary: File, appVersion: Int,
-                                                       maxSize: Long = DEFAULT_MAX_SIZE) {
+class DiskCache @JvmOverloads constructor(dictionary: File, appVersion: Int,
+                                          maxSize: Long = DEFAULT_DISK_MAX_SIZE) {
 
-    private val mTag: String = "TimedDiskLruCache"
-    private var mDiskLruCache: DiskLruCache = DiskLruCache.open(dictionary,
+    private val mTag: String = "DiskCache"
+    private val diskLruCache: DiskLruCache = DiskLruCache.open(dictionary,
             appVersion, 2, maxSize)
     /**
-     * [encryptKey]有值 则所有文件都加密
+     * [encryptPwd]有值 则所有文件都加密
      */
-    var encryptKey: String = ""
+    private var encryptPwd: String = ""
+
+    /**
+     * 获取JSONObject类型数据
+     *
+     * @param key
+     * @param password 加密Key
+     */
+    fun getJsonObj(key: String, password: String = encryptPwd): JSONObject? {
+        return getJsonObj(key, null, password)
+    }
 
     /**
      * 获取JSONObject类型数据
@@ -39,12 +52,13 @@ open class TimedDiskLruCache @JvmOverloads constructor(dictionary: File, appVers
      * @param password 加密Key
      */
     @JvmOverloads
-    fun getAsJsonObj(key: String, password: String = encryptKey): JSONObject? {
+    fun getJsonObj(key: String, defaultValue: JSONObject? = JSONObject(),
+                   password: String = encryptPwd): JSONObject? {
         return try {
-            JSONObject(getAsString(key, password))
+            JSONObject(getString(key, password))
         } catch (e: JSONException) {
             logw(mTag, e.toString())
-            null
+            defaultValue
         }
     }
 
@@ -53,10 +67,10 @@ open class TimedDiskLruCache @JvmOverloads constructor(dictionary: File, appVers
      *
      * @param key
      * @param jsonObject
-     * @param password 加密Key
+     * @param lifeTime 有效时间
      */
-    fun put(key: String, jsonObject: JSONObject, password: String = encryptKey) {
-        put(key, jsonObject, DEFAULT_LIFE_TIME, password)
+    fun putJsonObj(key: String, jsonObject: JSONObject, lifeTime: Long = DEFAULT_LIFE_TIME) {
+        putJsonObj(key, jsonObject, encryptPwd, lifeTime)
     }
 
     /**
@@ -64,13 +78,22 @@ open class TimedDiskLruCache @JvmOverloads constructor(dictionary: File, appVers
      *
      * @param key
      * @param jsonObject
+     * @param password 加密密码
      * @param lifeTime 有效时间
-     * @param password 加密Key
      */
     @JvmOverloads
-    fun put(key: String, jsonObject: JSONObject, lifeTime: Long = DEFAULT_LIFE_TIME,
-            password: String = encryptKey) {
-        put(key, jsonObject.toString(), lifeTime, password)
+    fun putJsonObj(key: String, jsonObject: JSONObject, password: String = encryptPwd,
+                   lifeTime: Long = DEFAULT_LIFE_TIME) {
+        putString(key, jsonObject.toString(), password, lifeTime)
+    }
+
+    /**
+     * 获取JSONArray类型数据
+     *
+     * @param key
+     */
+    fun getJsonArray(key: String, password: String = encryptPwd): JSONArray? {
+        return getJsonArray(key, null, password)
     }
 
     /**
@@ -79,12 +102,13 @@ open class TimedDiskLruCache @JvmOverloads constructor(dictionary: File, appVers
      * @param key
      */
     @JvmOverloads
-    fun getAsJsonArray(key: String, password: String = encryptKey): JSONArray? {
+    fun getJsonArray(key: String, defaultValue: JSONArray? = JSONArray(),
+                     password: String = encryptPwd): JSONArray? {
         return try {
-            JSONArray(getAsString(key, password))
+            JSONArray(getString(key, password))
         } catch (e: JSONException) {
             logw(mTag, e.toString())
-            null
+            defaultValue
         }
     }
 
@@ -93,10 +117,10 @@ open class TimedDiskLruCache @JvmOverloads constructor(dictionary: File, appVers
      *
      * @param key
      * @param jsonArray
-     * @param password 加密Key
+     * @param lifeTime 有效时间
      */
-    fun put(key: String, jsonArray: JSONArray, password: String = encryptKey) {
-        put(key, jsonArray, DEFAULT_LIFE_TIME, password)
+    fun putJsonArray(key: String, jsonArray: JSONArray, lifeTime: Long = DEFAULT_LIFE_TIME) {
+        putJsonArray(key, jsonArray, encryptPwd, lifeTime)
     }
 
     /**
@@ -104,34 +128,36 @@ open class TimedDiskLruCache @JvmOverloads constructor(dictionary: File, appVers
      *
      * @param key
      * @param jsonArray
+     * @param password 加密密码
      * @param lifeTime 有效时间
-     * @param password 加密Key
      */
     @JvmOverloads
-    fun put(key: String, jsonArray: JSONArray, lifeTime: Long = DEFAULT_LIFE_TIME,
-            password: String = encryptKey) {
-        put(key, jsonArray.toString(), lifeTime, password)
+    fun putJsonArray(key: String, jsonArray: JSONArray, password: String = encryptPwd,
+                     lifeTime: Long = DEFAULT_LIFE_TIME) {
+        putString(key, jsonArray.toString(), password, lifeTime)
     }
 
     /**
      * 获取Bitmap类型数据
      *
      * @param key
+     * @param password
      */
-    @JvmOverloads
-    fun getAsBitmap(key: String, password: String = encryptKey): Bitmap? {
-        return getAsByteArray(key, password).toBitmap()
+    fun getBitmap(key: String, password: String = encryptPwd): Bitmap? {
+        return getBitmap(key, null, password)
     }
 
     /**
-     * 保存Bitmap类型数据
+     * 获取Bitmap类型数据
      *
      * @param key
-     * @param bitmap
-     * @param password 加密Key
+     * @param defaultValue default value
+     * @param password
      */
-    fun put(key: String, bitmap: Bitmap, password: String = encryptKey) {
-        put(key, bitmap, DEFAULT_LIFE_TIME, password)
+    @JvmOverloads
+    fun getBitmap(key: String, defaultValue: Bitmap? = null,
+                  password: String = encryptPwd): Bitmap? {
+        return getByteArray(key, defaultValue?.toByteArray(), password)?.toBitmap()
     }
 
     /**
@@ -140,12 +166,23 @@ open class TimedDiskLruCache @JvmOverloads constructor(dictionary: File, appVers
      * @param key
      * @param bitmap
      * @param lifeTime 有效时间
-     * @param password 加密Key
+     */
+    fun putBitmap(key: String, bitmap: Bitmap, lifeTime: Long = DEFAULT_LIFE_TIME) {
+        putBitmap(key, bitmap, encryptPwd, lifeTime)
+    }
+
+    /**
+     * 保存Bitmap类型数据
+     *
+     * @param key
+     * @param bitmap
+     * @param password 加密密码
+     * @param lifeTime 有效时间
      */
     @JvmOverloads
-    fun put(key: String, bitmap: Bitmap, lifeTime: Long = DEFAULT_LIFE_TIME,
-            password: String = encryptKey) {
-        put(key, bitmap.toByteArray(), lifeTime, password)
+    fun putBitmap(key: String, bitmap: Bitmap, password: String = encryptPwd,
+                  lifeTime: Long = DEFAULT_LIFE_TIME) {
+        putByteArray(key, bitmap.toByteArray(), password, lifeTime)
     }
 
     /**
@@ -154,19 +191,8 @@ open class TimedDiskLruCache @JvmOverloads constructor(dictionary: File, appVers
      * @param key
      */
     @JvmOverloads
-    fun getAsDrawable(key: String, password: String = encryptKey): Drawable? {
-        return getAsBitmap(key, password).toDrawable()
-    }
-
-    /**
-     * 保存Drawable类型数据
-     *
-     * @param key
-     * @param drawable
-     * @param password 加密Key
-     */
-    fun put(key: String, drawable: Drawable, password: String = encryptKey) {
-        put(key, drawable, DEFAULT_LIFE_TIME, password)
+    fun getDrawable(key: String, defaultValue: Drawable? = null, password: String = encryptPwd): Drawable? {
+        return getBitmap(key, defaultValue?.toBitmap(), password)?.toDrawable()
     }
 
     /**
@@ -175,12 +201,23 @@ open class TimedDiskLruCache @JvmOverloads constructor(dictionary: File, appVers
      * @param key
      * @param drawable
      * @param lifeTime 有效时间
-     * @param password 加密Key
+     */
+    fun putDrawable(key: String, drawable: Drawable, lifeTime: Long = DEFAULT_LIFE_TIME) {
+        putDrawable(key, drawable, encryptPwd, lifeTime)
+    }
+
+    /**
+     * 保存Drawable类型数据
+     *
+     * @param key
+     * @param drawable
+     * @param password 加密密码
+     * @param lifeTime 有效时间
      */
     @JvmOverloads
-    fun put(key: String, drawable: Drawable, lifeTime: Long = DEFAULT_LIFE_TIME,
-            password: String = encryptKey) {
-        put(key, drawable.toBitmap(), lifeTime, password)
+    fun putDrawable(key: String, drawable: Drawable, password: String = encryptPwd,
+                    lifeTime: Long = DEFAULT_LIFE_TIME) {
+        putBitmap(key, drawable.toBitmap(), password, lifeTime)
     }
 
     /**
@@ -190,21 +227,22 @@ open class TimedDiskLruCache @JvmOverloads constructor(dictionary: File, appVers
      * @param password
      */
     @JvmOverloads
-    fun getAsString(key: String, password: String = encryptKey): String {
+    fun getString(key: String, defaultValue: String = "",
+                  password: String = encryptPwd): String {
         try {
-            val snapshot = get(key) ?: return ""
+            val snapshot = get(key) ?: return defaultValue
             val lifeTime = snapshot.getLifeTime()
             if (lifeTime == -1L || System.currentTimeMillis() < lifeTime) {
-                val inputStream = handleOrDecrypt(snapshot, password) ?: return ""
+                val inputStream = handleOrDecrypt(snapshot, password) ?: return defaultValue
                 return inputStream.readTextAndClose()
             } else {
                 //remove key
                 remove(key)
-                return ""
+                return defaultValue
             }
         } catch (e: IOException) {
             logw(mTag, e.toString())
-            return ""
+            return defaultValue
         }
     }
 
@@ -213,10 +251,10 @@ open class TimedDiskLruCache @JvmOverloads constructor(dictionary: File, appVers
      *
      * @param key
      * @param string
-     * @param password 加密Key
+     * @param lifeTime 有效时间
      */
-    fun put(key: String, string: String, password: String = encryptKey) {
-        put(key, string, DEFAULT_LIFE_TIME, password)
+    fun putString(key: String, string: String, lifeTime: Long = DEFAULT_LIFE_TIME) {
+        putString(key, string, encryptPwd, lifeTime)
     }
 
     /**
@@ -224,14 +262,14 @@ open class TimedDiskLruCache @JvmOverloads constructor(dictionary: File, appVers
      *
      * @param key
      * @param string
+     * @param password 加密密码
      * @param lifeTime 有效时间
-     * @param password 加密Key
      */
     @JvmOverloads
-    fun put(key: String, string: String, lifeTime: Long = DEFAULT_LIFE_TIME,
-            password: String = encryptKey) {
+    fun putString(key: String, string: String, password: String = encryptPwd,
+                  lifeTime: Long = DEFAULT_LIFE_TIME) {
         try {
-            val editor = mDiskLruCache.edit(key.md5()) ?: return
+            val editor = diskLruCache.edit(key.md5()) ?: return
             val outputStream: OutputStream = handleOrEncrypt(editor, password) ?: return
 
             if (writeToString(string, outputStream)) {
@@ -249,15 +287,28 @@ open class TimedDiskLruCache @JvmOverloads constructor(dictionary: File, appVers
      * 获取ByteArray类型数据
      *
      * @param key
+     * @param password
+     */
+    fun getByteArray(key: String, password: String = encryptPwd): ByteArray? {
+        return getByteArray(key, null, password)
+    }
+
+    /**
+     * 获取ByteArray类型数据
+     *
+     * @param key
+     * @param defaultValue default valude
+     * @param password
      */
     @JvmOverloads
-    fun getAsByteArray(key: String, password: String = encryptKey): ByteArray? {
+    fun getByteArray(key: String, defaultValue: ByteArray? = null,
+                     password: String = encryptPwd): ByteArray? {
         try {
             val snapshot = get(key) ?: return null
             val lifeTime = snapshot.getLifeTime()
             if (lifeTime == DEFAULT_LIFE_TIME || System.currentTimeMillis() < lifeTime) {
                 val byteArrayOutputStream = ByteArrayOutputStream()
-                val inputStream = handleOrDecrypt(snapshot, password) ?: return null
+                val inputStream = handleOrDecrypt(snapshot, password) ?: return defaultValue
                 inputStream.use { input ->
                     byteArrayOutputStream.use {
                         input.copyTo(it, 512)
@@ -266,11 +317,11 @@ open class TimedDiskLruCache @JvmOverloads constructor(dictionary: File, appVers
                 return byteArrayOutputStream.toByteArray()
             } else {
                 remove(key)
-                return null
+                return defaultValue
             }
         } catch (e: IOException) {
             logw(mTag, e.toString())
-            return null
+            return defaultValue
         }
     }
 
@@ -279,10 +330,10 @@ open class TimedDiskLruCache @JvmOverloads constructor(dictionary: File, appVers
      *
      * @param key
      * @param byteArray
-     * @param password 加密Key
+     * @param lifeTime 有效时间
      */
-    fun put(key: String, byteArray: ByteArray, password: String = encryptKey) {
-        put(key, byteArray, DEFAULT_LIFE_TIME, password)
+    fun putByteArray(key: String, byteArray: ByteArray, lifeTime: Long = DEFAULT_LIFE_TIME) {
+        putByteArray(key, byteArray, encryptPwd, lifeTime)
     }
 
     /**
@@ -290,14 +341,14 @@ open class TimedDiskLruCache @JvmOverloads constructor(dictionary: File, appVers
      *
      * @param key
      * @param byteArray
+     * @param password 加密密码
      * @param lifeTime 有效时间
-     * @param password 加密Key
      */
     @JvmOverloads
-    fun put(key: String, byteArray: ByteArray, lifeTime: Long = DEFAULT_LIFE_TIME,
-            password: String = encryptKey) {
+    fun putByteArray(key: String, byteArray: ByteArray, password: String = encryptPwd,
+                     lifeTime: Long = DEFAULT_LIFE_TIME) {
         try {
-            val editor = mDiskLruCache.edit(key.md5()) ?: return
+            val editor = diskLruCache.edit(key.md5()) ?: return
             val outputStream = handleOrEncrypt(editor, password) ?: return
             if (writeToBytes(byteArray, outputStream)) {
                 editor.setLifTime(lifeTime)
@@ -314,20 +365,34 @@ open class TimedDiskLruCache @JvmOverloads constructor(dictionary: File, appVers
      * 获取Serializable类型的数据
      *
      * @param key
+     * @param password
+     */
+    @Suppress("UNCHECKED_CAST")
+    fun <T> getSerializable(key: String, password: String = encryptPwd): T? {
+        return getSerializable(key, null, password)
+    }
+
+    /**
+     * 获取Serializable类型的数据
+     *
+     * @param key
+     * @param defaultValue default value
+     * @param password
      */
     @JvmOverloads
     @Suppress("UNCHECKED_CAST")
-    fun <T> getAsSerializable(key: String, password: String = encryptKey): T? {
+    fun <T> getSerializable(key: String, defaultValue: T? = null,
+                            password: String = encryptPwd): T? {
         try {
             val snapshot = get(key) ?: return null
             val lifeTime = snapshot.getLifeTime()
             if (lifeTime == DEFAULT_LIFE_TIME || System.currentTimeMillis() < lifeTime) {
-                val inputStream = handleOrDecrypt(snapshot, password) ?: return null
+                val inputStream = handleOrDecrypt(snapshot, password) ?: return defaultValue
                 return ObjectInputStream(inputStream)
                         .readObject() as T
             } else {
                 remove(key)
-                return null
+                return defaultValue
             }
         } catch (e: IOException) {
             logw(mTag, e.toString())
@@ -336,19 +401,7 @@ open class TimedDiskLruCache @JvmOverloads constructor(dictionary: File, appVers
         } catch (castException: ClassCastException) {
             logw(mTag, castException.toString())
         }
-        return null
-    }
-
-
-    /**
-     * 保存Serializable类型的数据
-     *
-     * @param key
-     * @param serializable
-     * @param password 加密key
-     */
-    fun put(key: String, serializable: Serializable, password: String = encryptKey) {
-        put(key, serializable, DEFAULT_LIFE_TIME, password)
+        return defaultValue
     }
 
     /**
@@ -357,13 +410,24 @@ open class TimedDiskLruCache @JvmOverloads constructor(dictionary: File, appVers
      * @param key
      * @param serializable
      * @param lifeTime 有效时间
-     * @param password 加密key
+     */
+    fun putSerializable(key: String, serializable: Serializable, lifeTime: Long = DEFAULT_LIFE_TIME) {
+        putSerializable(key, serializable, encryptPwd, lifeTime)
+    }
+
+    /**
+     * 保存Serializable类型的数据
+     *
+     * @param key
+     * @param serializable
+     * @param password 加密密码
+     * @param lifeTime 有效时间
      */
     @JvmOverloads
-    fun put(key: String, serializable: Serializable, lifeTime: Long = DEFAULT_LIFE_TIME,
-            password: String = encryptKey) {
+    fun putSerializable(key: String, serializable: Serializable, password: String = encryptPwd,
+                        lifeTime: Long = DEFAULT_LIFE_TIME) {
         try {
-            val editor = mDiskLruCache.edit(key.md5()) ?: return
+            val editor = diskLruCache.edit(key.md5()) ?: return
             val outputStream = handleOrEncrypt(editor, password) ?: return
             if (writeToSerializable(serializable, outputStream)) {
                 editor.setLifTime(lifeTime)
@@ -383,7 +447,7 @@ open class TimedDiskLruCache @JvmOverloads constructor(dictionary: File, appVers
      */
     fun get(key: String): DiskLruCache.Snapshot? {
         return try {
-            mDiskLruCache.get(key.md5())
+            diskLruCache.get(key.md5())
         } catch (e: IOException) {
             logw(mTag, e.toString())
             null
@@ -397,7 +461,7 @@ open class TimedDiskLruCache @JvmOverloads constructor(dictionary: File, appVers
      */
     fun remove(key: String): Boolean {
         return try {
-            mDiskLruCache.remove(key.md5())
+            diskLruCache.remove(key.md5())
         } catch (e: IOException) {
             logw(mTag, e.toString())
             false
@@ -408,21 +472,21 @@ open class TimedDiskLruCache @JvmOverloads constructor(dictionary: File, appVers
      * 删除所有缓存
      */
     fun evictAll() {
-        mDiskLruCache.delete()
+        diskLruCache.delete()
     }
 
     /**
      * 缓存大小
      */
     fun size(): Long {
-        return mDiskLruCache.size()
+        return diskLruCache.size()
     }
 
     /**
      * 最大缓存
      */
     fun maxSize(): Long {
-        return mDiskLruCache.maxSize
+        return diskLruCache.maxSize
     }
 
     /**
@@ -471,13 +535,13 @@ open class TimedDiskLruCache @JvmOverloads constructor(dictionary: File, appVers
      * 如果password不为空则加密
      *
      * @param editor editor
-     * @param password 加密Key
+     * @param password 加密密码
      */
     private fun handleOrEncrypt(editor: DiskLruCache.Editor, password: String): OutputStream? {
         var outputStream = editor.newOutputStream(0) ?: return null
         //加密
         if (password.isNotEmpty()) {
-            val encryptCipher = initEncryptCipher(password)
+            val encryptCipher = initCipher(password, true)
             outputStream = CipherOutputStream(outputStream, encryptCipher)
         }
         return outputStream
@@ -487,63 +551,30 @@ open class TimedDiskLruCache @JvmOverloads constructor(dictionary: File, appVers
      * 如果password不为空则解密
      *
      * @param snapshot snapshot
-     * @param password 加密Key
+     * @param password 加密密码
      */
     private fun handleOrDecrypt(snapshot: DiskLruCache.Snapshot, password: String): InputStream? {
         //解密
         var inputStream = snapshot.getInputStream(0) ?: return null
         if (password.isNotEmpty()) {
-            val decryptCipher = initDecryptCipher(password)
+            val decryptCipher = initCipher(password, false)
             inputStream = CipherInputStream(inputStream, decryptCipher)
         }
         return inputStream
     }
 
     /**
-     * 初始化加密cipher
+     * 初始化cipher
      *
      * @param key 加密Key
      */
-    private fun initEncryptCipher(key: String): Cipher? {
+    private fun initCipher(key: String, isEncrypt: Boolean): Cipher? {
         return try {
-            val secretKey = generateSecretKey(key)
-            val encryptCipher = Cipher.getInstance(AES_TRANSFORM)
-            encryptCipher.init(Cipher.ENCRYPT_MODE, secretKey,
-                    IvParameterSpec(ByteArray(encryptCipher.blockSize)))
-            encryptCipher
+            val secretKey = generateSecretKey(key, 32)
+            initCipher(secretKey, DEFAULT_AES_TRANSFORMATION, isEncrypt)
         } catch (e: Exception) {
             logw(mTag, e.toString())
             null
         }
     }
-
-    /**
-     * 初始化解密cipher
-     *
-     * @param key 加密Key
-     */
-    private fun initDecryptCipher(key: String): Cipher? {
-        return try {
-            val secretKey = generateSecretKey(key)
-            val decryptCipher = Cipher.getInstance(AES_TRANSFORM)
-            decryptCipher.init(Cipher.DECRYPT_MODE, secretKey,
-                    IvParameterSpec(ByteArray(decryptCipher.blockSize)))
-            decryptCipher
-        } catch (e: Exception) {
-            logw(mTag, e.toString())
-            null
-        }
-    }
-
-    /**
-     * 生成SecretKey
-     *
-     * @param key 加密Key
-     */
-    private fun generateSecretKey(key: String): SecretKeySpec {
-        return SecretKeySpec(
-                InsecureSHA1PRNGKeyDerivator.deriveInsecureKey(key.toByteArray(), 32),
-                AES)
-    }
-
 }

@@ -4,9 +4,9 @@ import android.graphics.Bitmap
 import android.graphics.drawable.Drawable
 import com.gojuno.koptional.Optional
 import com.gojuno.koptional.toOptional
+import com.zyyoona7.cachemanager.KCache
 import com.zyyoona7.cachemanager.cache.CacheManager
 import com.zyyoona7.cachemanager.ext.DEFAULT_LIFE_TIME
-import com.zyyoona7.cachemanager.getCache
 import io.reactivex.Observable
 import org.json.JSONArray
 import org.json.JSONObject
@@ -17,7 +17,7 @@ import java.io.Serializable
  * @version  v1.0.0
  * @since    2018/9/28.
  */
-class RxKCache @JvmOverloads internal constructor(cacheManager: CacheManager = getCache()) {
+class RxKCache @JvmOverloads internal constructor(cacheManager: CacheManager = KCache.getCache()) {
 
     private val mCacheManager = cacheManager
     private val mEncryptPwd = mCacheManager.encryptPassword

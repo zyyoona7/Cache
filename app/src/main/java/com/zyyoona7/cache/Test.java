@@ -1,6 +1,8 @@
 package com.zyyoona7.cache;
 
 
+import com.zyyoona7.cachemanager.KCache;
+
 /**
  * @author zyyoona7
  * @version v1.0
@@ -8,5 +10,8 @@ package com.zyyoona7.cache;
  */
 public class Test {
 
+    void cache(){
+        KCache.getCache();
+    }
 }
 

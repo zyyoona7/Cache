@@ -9,8 +9,8 @@ android {
     defaultConfig {
         minSdkVersion 16
         targetSdkVersion 28
-        versionCode 3
-        versionName "1.0.0"
+        versionCode 4
+        versionName "1.0.1"
 
     }
 
@@ -53,14 +53,16 @@ dependencies {
 }
 
 //版本号 version code
-version = "1.0.0"
+version = "1.0.1"
 //JCenter上显示的路径 path
 group = "com.github.zyyoona7"
+//项目名称 project name
+androidArtifact {
+    artifactId = "kcache"
+}
 publish {
     //bintray.com 用户名/组织名 user/org name
     userOrg = 'zyyoona7'
-    //项目名称 project name
-    artifactId = 'kcache'
     //项目描述 description
     desc = 'Wrapper for LruCache and DiskLruCache, support for expiration time, encryption/decryption'
     //项目网址链接 link

@@ -416,6 +416,28 @@ class CacheManager internal constructor(memoryCache: MemoryCache, diskCache: Dis
     }
 
     /**
+     * 移除指定key的所有数据数据
+     */
+    fun remove(key: String) {
+        removeFromMemory(key)
+        removeFromDisk(key)
+    }
+
+    /**
+     * 移除指定key的内存数据
+     */
+    fun removeFromMemory(key: String) {
+        mMemoryCache.remove(key)
+    }
+
+    /**
+     * 移除指定key的磁盘数据
+     */
+    fun removeFromDisk(key: String) {
+        mDiskCache.remove(key)
+    }
+
+    /**
      * 内存已使用缓存大小
      */
     fun memorySize(): Int {
@@ -441,5 +463,27 @@ class CacheManager internal constructor(memoryCache: MemoryCache, diskCache: Dis
      */
     fun diskMaxSize(): Long {
         return mDiskCache.maxSize()
+    }
+
+    /**
+     * 删除所有缓存
+     */
+    fun evictAll() {
+        evictMemoryAll()
+        evictDiskAll()
+    }
+
+    /**
+     * 删除所有内存缓存
+     */
+    fun evictMemoryAll() {
+        mMemoryCache.evictAll()
+    }
+
+    /**
+     * 删除所有磁盘缓存
+     */
+    fun evictDiskAll() {
+        mDiskCache.evictAll()
     }
 }

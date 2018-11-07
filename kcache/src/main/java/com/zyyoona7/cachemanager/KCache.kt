@@ -1,5 +1,3 @@
-@file:JvmName("KCache")
-
 package com.zyyoona7.cachemanager
 
 import android.os.Environment

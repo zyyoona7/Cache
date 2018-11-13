@@ -13,6 +13,10 @@ class MainActivity : AppCompatActivity() {
         setContentView(R.layout.activity_main)
         //初始化缓存路径
         KCache.init(filesDir.absolutePath + "/diskCache", 1, DEFAULT_DISK_MAX_SIZE)
+
+//        KCache.getCache().evictAll()
+
+//        KCache.getCache().putString("1234","")
     }
 
 }

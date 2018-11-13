@@ -1,7 +1,7 @@
 package com.zyyoona7.cachemanager
 
 import android.os.Environment
-import android.support.v4.util.SimpleArrayMap
+import android.support.v4.util.ArrayMap
 import com.gojuno.koptional.Optional
 import com.zyyoona7.cachemanager.cache.CacheManager
 import com.zyyoona7.cachemanager.cache.DiskCache
@@ -17,12 +17,12 @@ import java.io.File
  * @version  v1.0.0
  * @since    2018/9/28.
  */
-class KCache{
+class KCache {
 
     companion object {
-        private val mMemoryCacheMap: SimpleArrayMap<String, MemoryCache> = SimpleArrayMap()
-        private val mDiskCacheMap: SimpleArrayMap<String, DiskCache> = SimpleArrayMap()
-        private val mCacheMap: SimpleArrayMap<String, CacheManager> = SimpleArrayMap()
+        private val mMemoryCacheMap: ArrayMap<String, MemoryCache> = ArrayMap()
+        private val mDiskCacheMap: ArrayMap<String, DiskCache> = ArrayMap()
+        private val mCacheMap: ArrayMap<String, CacheManager> = ArrayMap()
         private var mCachePath: String = Environment.getDownloadCacheDirectory().absolutePath + "/DiskCache"
         private var mAppVersion: Int = 1
         private var mDiskMaxSize: Long = DEFAULT_DISK_MAX_SIZE
@@ -72,25 +72,31 @@ class KCache{
             val memoryCache = mMemoryCacheMap[cacheKey]
             return if (memoryCache == null) {
                 val newMemoryCache = MemoryCache(memoryMaxSize, mode)
-                mMemoryCacheMap.put(cacheKey, newMemoryCache)
+                mMemoryCacheMap[cacheKey] = newMemoryCache
                 newMemoryCache
             } else memoryCache
         }
 
         /**
-         * 获取或者创建DiskCache对象
+         * 移除缓存的DiskCache对象
          */
         @JvmStatic
         @JvmOverloads
         fun getDiskCache(diskCachePath: String = mCachePath, appVersion: Int = mAppVersion,
                          diskMaxSize: Long = mDiskMaxSize): DiskCache {
+            val cacheFile = File(diskCachePath)
             val cacheKey = "${diskCachePath}_$diskMaxSize"
-            val diskCache = mDiskCacheMap[cacheKey]
-            return if (diskCache == null) {
-                val newDiskCache = DiskCache(File(diskCachePath), appVersion, diskMaxSize)
-                mDiskCacheMap.put(cacheKey, newDiskCache)
-                newDiskCache
-            } else diskCache
+            if (cacheFile.exists()) {
+                val diskCache = mDiskCacheMap[cacheKey]
+                return if (diskCache == null) {
+                    val newDiskCache = DiskCache(File(diskCachePath), appVersion, diskMaxSize)
+                    mDiskCacheMap[cacheKey] = newDiskCache
+                    newDiskCache
+                } else diskCache
+            }
+            val disk = DiskCache(File(diskCachePath), appVersion, diskMaxSize)
+            mDiskCacheMap[cacheKey] = disk
+            return disk
         }
 
         /**

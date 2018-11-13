@@ -56,7 +56,7 @@ class DiskCache @JvmOverloads constructor(dictionary: File, appVersion: Int,
                    password: String = encryptPwd): JSONObject? {
         return try {
             JSONObject(getString(key, password))
-        } catch (e: JSONException) {
+        } catch (e: Throwable) {
             logw(mTag, e.toString())
             defaultValue
         }
@@ -473,6 +473,7 @@ class DiskCache @JvmOverloads constructor(dictionary: File, appVersion: Int,
      */
     fun evictAll() {
         diskLruCache.delete()
+        diskLruCache.directory.delete()
     }
 
     /**
